@@ -1,17 +1,17 @@
 # Jellyfin sign-in for Shelfarr
 
-This unofficial Rails extension shows the Jellyfin form directly on Shelfarr’s sign-in page. Existing Shelfarr users can open their usual form with **Use Shelfarr sign-in**. A successful Jellyfin sign-in provisions a regular Shelfarr account and binds it to the Jellyfin user ID. If an active local account already has the same username, including after normalization, it keeps its own Shelfarr sign-in and the extension blocks Jellyfin account creation. Deleting a Shelfarr account frees its username for a fresh Jellyfin-linked account with the regular user role.
+This unofficial Rails extension uses Shelfarr’s standard username and password form for both Shelfarr and Jellyfin accounts. An active local Shelfarr username always uses its Shelfarr password. An unknown username or an existing Jellyfin-linked account is checked against Jellyfin. A first successful Jellyfin sign-in provisions a regular Shelfarr account linked to the Jellyfin user ID. If the new account’s normalized username is already taken, provisioning is blocked. Deleting a Shelfarr account frees its username for a fresh Jellyfin-linked account with the regular user role.
 
 ## Install from GitHub
 
-1. Set up a local Shelfarr administrator and back up the Shelfarr storage volume. Keep **Disable password authentication** off, including the `DISABLE_AUTH` environment variable. Disable OIDC auto-redirect to open the Jellyfin form by default.
+1. Set up a local Shelfarr administrator and back up the Shelfarr storage volume. Keep **Disable password authentication** off, including the `DISABLE_AUTH` environment variable. Disable OIDC auto-redirect to open the password form by default.
 2. Add `extends` and the Jellyfin environment settings to the existing `shelfarr` service in your Compose file. Keep your existing image, volumes, and network settings. When switching from a ZIP install, remove the previous adapter bind mounts so Compose uses the GitHub copies.
 
    ```yaml
    services:
      shelfarr:
        extends:
-         file: https://github.com/karyeet/shelfarr-jellyfin-login.git#v0.1.2:docker-compose.override.yml
+         file: https://github.com/karyeet/shelfarr-jellyfin-login.git#v0.1.3:docker-compose.override.yml
          service: shelfarr
        environment:
          JELLYFIN_AUTH_URL: "https://jellyfin.example.net"
@@ -30,9 +30,9 @@ This unofficial Rails extension shows the Jellyfin form directly on Shelfarr’s
    docker compose logs --tail=100 shelfarr
    ```
 
-6. Test your local administrator with **Use Shelfarr sign-in**. Then open Shelfarr’s sign-in page and enter the actual Jellyfin username and password of a regular test user. Check the first sign-in, logout, repeat sign-in, wrong-password rejection, and Shelfarr two-factor verification if you use it.
+6. Test your local administrator and a regular Jellyfin test user through the same sign-in form. Check first sign-in, logout, repeat sign-in, wrong-password rejection, and Shelfarr two-factor verification if you use it.
 
-To publish your own GitHub release, put the contents of the release ZIP at the root of a repository you control and push a Git tag such as `v0.1.2`. The Compose URL refers to that Git tag. The three extension files and `docker-compose.override.yml` belong in the same directory.
+To publish your own GitHub release, put the contents of the release ZIP at the root of a repository you control and push a Git tag such as `v0.1.3`. The Compose URL refers to that Git tag. The three extension files and `docker-compose.override.yml` belong in the same directory.
 
 ### Install from the ZIP
 
@@ -52,6 +52,7 @@ The browser still uses HTTPS to reach Shelfarr. Passwords and Jellyfin tokens cr
 
 ## Account and session behavior
 
+- A mistyped local Shelfarr username that matches no active local account can send the entered password to the configured Jellyfin server.
 - Jellyfin verifies the submitted password. Shelfarr keeps a random local password digest for the account and issues its own session. The adapter requests Jellyfin token revocation immediately after authentication and logs a warning if that request fails.
 - By default, any user who can authenticate to the configured Jellyfin server through this connection is eligible for an ordinary Shelfarr account. Existing Shelfarr sessions and API tokens follow Shelfarr’s own expiration and revocation rules, even after a Jellyfin account is disabled.
 - Shelfarr’s two-factor challenge works for Jellyfin accounts and expires after five minutes. The challenge uses Shelfarr’s configured cache to rate-limit attempts by account. While the adapter is enabled, Shelfarr records accepted authenticator codes and consumes backup codes under a database lock for both local and Jellyfin sign-ins. Shelfarr’s profile actions for regenerating backup codes or disabling two-factor authentication still require a local password. Arrange recovery with your Shelfarr administrator before depending on this feature.

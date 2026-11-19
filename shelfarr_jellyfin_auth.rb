@@ -187,41 +187,32 @@ module ShelfarrJellyfinSessionsOverride
       return redirect_to new_session_path, alert: "Enable Shelfarr password authentication to sign in."
     end
 
-    jellyfin = params[:login_provider] == PROVIDER
-    username = params[jellyfin ? :jellyfin_username : :username]
-    password = params[jellyfin ? :jellyfin_password : :password]
+    username = params[:username]
+    password = params[:password]
     return handle_failed_login(nil, nil) unless username.is_a?(String) && username.valid_encoding? && password.is_a?(String)
 
     username = username.strip
-    unless jellyfin
-      user = User.active.find_by(username: username.downcase)
-      return handle_failed_login(nil, username) if user.nil? || user.oidc_provider == PROVIDER
-
-      return super
-    end
+    user = User.active.find_by(username: username.downcase)
+    return super if user && user.oidc_provider != PROVIDER
 
     unless request.ssl?
-      return redirect_to new_session_path, alert: "Jellyfin sign-in requires HTTPS."
+      return redirect_to new_session_path, alert: "Sign in over HTTPS."
     end
     if User.active.none?
       return redirect_to sign_up_path, alert: "Create your local Shelfarr administrator first."
     end
 
     jellyfin_user = ShelfarrJellyfinAuth.authenticate(username: username, password: password)
-    unless jellyfin_user
-      log_security_event("login.failed", nil, username)
-      return redirect_to jellyfin_login_path, alert: "Invalid username or password."
-    end
+    return handle_failed_login(nil, username) unless jellyfin_user
 
     user = jellyfin_shelfarr_user(jellyfin_user)
     unless user
-      return redirect_to jellyfin_login_path,
-        alert: "This Jellyfin account can't sign in. Contact your Shelfarr administrator."
+      return redirect_to new_session_path, alert: "This account can't sign in. Contact your Shelfarr administrator."
     end
 
     if user.locked?
       log_security_event("login.blocked_locked", user, username)
-      redirect_to jellyfin_login_path, alert: "Account is locked. Try again later."
+      redirect_to new_session_path, alert: "Account is locked. Try again later."
     elsif user.otp_enabled?
       request.session_options[:secure] = true
       session[:pending_user_id] = user.id
@@ -232,7 +223,7 @@ module ShelfarrJellyfinSessionsOverride
     end
   rescue ShelfarrJellyfinAuth::ServiceUnavailable => e
     Rails.logger.warn "[Jellyfin login] Authentication unavailable: #{e.message}"
-    redirect_to jellyfin_login_path, alert: "Jellyfin authentication is unavailable. Try again later."
+    redirect_to new_session_path, alert: "Sign-in is temporarily unavailable. Try again later."
   end
 
   def verify_otp
@@ -252,18 +243,6 @@ module ShelfarrJellyfinSessionsOverride
   end
 
   private
-
-  # Shelfarr's built-in password errors redirect to this route.
-  def new_session_path(*args, **options)
-    return super unless args.empty? && options.empty? && action_name == "create" &&
-      ShelfarrJellyfinAuth.configured? && params[:login_provider] != PROVIDER
-
-    super(local: 1)
-  end
-
-  def jellyfin_login_path
-    new_session_path(login_provider: PROVIDER, local: 1)
-  end
 
   def jellyfin_shelfarr_user(identity)
     id = identity.fetch(:id)
@@ -303,7 +282,7 @@ module ShelfarrJellyfinSessionsOverride
     end
 
     clear_pending_otp
-    redirect_to jellyfin_login_path, alert: "Sign in again to verify your Jellyfin account."
+    redirect_to new_session_path, alert: "Sign in again to verify your account."
     false
   end
 
@@ -333,6 +312,15 @@ Rails.application.config.to_prepare do
 
   unless SessionsController.ancestors.include?(ShelfarrJellyfinSessionsOverride)
     SessionsController.prepend(ShelfarrJellyfinSessionsOverride)
+    if ShelfarrJellyfinAuth.configured?
+      # Keep the standard form while accepting Jellyfin passwords beyond Shelfarr's bcrypt limit.
+      SessionsController.default_form_builder(Class.new(ActionView::Helpers::FormBuilder) do
+        def password_field(method, options = {})
+          super(method, options.except(:maxlength))
+        end
+      end)
+    end
+
     SessionsController.rate_limit to: 10, within: ShelfarrJellyfinSessionsOverride::OTP_TIMEOUT,
       only: :submit_otp, name: "jellyfin-otp", by: -> { session[:pending_user_id] },
       if: -> { session[:shelfarr_jellyfin_otp_expires_at].is_a?(Integer) },

@@ -59,20 +59,15 @@ class SessionsController
 
   attr_reader :result, :logged_in, :session, :request
 
-  def initialize(username:, password:, provider: nil, https: true)
-    @params = if provider == "jellyfin"
-      { jellyfin_username: username, jellyfin_password: password, login_provider: provider }
-    else
-      { username: username, password: password }
-    end
+  def initialize(username:, password:, https: true)
+    @params = { username: username, password: password }
     @session = {}
     @request = Request.new(https)
   end
 
   def params = @params
   def create = (@result = :local_fallback)
-  def action_name = "create"
-  def new_session_path(local: nil, **) = local ? "/session/new?local=1" : "/session/new"
+  def new_session_path = "/session/new"
   def sign_up_path = "/sign_up"
   def redirect_to(path, **options) = (@result = [path, options[:alert]])
 
@@ -97,25 +92,29 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
     ENV["JELLYFIN_AUTH_URL"] = @old_url
   end
 
-  def remote_login(username: "Mary Jones", https: true)
-    SessionsController.new(username: username, password: "fixture-password", provider: "jellyfin", https: https)
+  def login_for(username: "Mary Jones", https: true)
+    SessionsController.new(username: username, password: "fixture-password", https: https)
   end
 
-  def test_local_form_never_contacts_jellyfin
+  def test_a_local_username_never_contacts_jellyfin
     ShelfarrJellyfinAuth.stub(:authenticate, ->(**) { flunk "Unexpected remote authentication" }) do
-      login = SessionsController.new(username: "localadmin", password: "local-password")
+      login = login_for(username: " LocalAdmin ")
       login.create
       assert_equal :local_fallback, login.result
     end
   end
 
-  def test_local_form_rejects_linked_and_unknown_names_the_same_way
+  def test_rejected_linked_and_unknown_names_return_the_same_error
     User.create!(username: "mary_jones", role: :user, oidc_provider: "jellyfin", oidc_uid: "a" * 32)
-    ShelfarrJellyfinAuth.stub(:authenticate, ->(**) { flunk "Unexpected remote authentication" }) do
-      %w[mary_jones unknown].each do |username|
-        login = SessionsController.new(username: username, password: "fixture-password")
+    %w[mary_jones unknown].each do |username|
+      reject = ->(**credentials) do
+        assert_equal({ username: username, password: "fixture-password" }, credentials)
+        nil
+      end
+      ShelfarrJellyfinAuth.stub(:authenticate, reject) do
+        login = login_for(username: username)
         login.create
-        assert_equal ["/session/new?local=1", "Invalid username or password."], login.result
+        assert_equal ["/session/new", "Invalid username or password."], login.result
         assert_nil login.logged_in
       end
     end
@@ -124,13 +123,13 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
   def test_first_and_repeat_logins_use_the_jellyfin_identity
     remote = { id: "a" * 32, name: "Mary Jones" }
     ShelfarrJellyfinAuth.stub(:authenticate, remote) do
-      first = remote_login
+      first = login_for
       first.create
       assert_equal "mary_jones", first.logged_in.username
       assert_equal :user, first.logged_in.role
       assert_equal "jellyfin", first.logged_in.oidc_provider
       assert_equal "a" * 32, first.logged_in.oidc_uid
-      second = remote_login
+      second = login_for(username: first.logged_in.username)
       second.create
       assert_same first.logged_in, second.logged_in
     end
@@ -140,15 +139,16 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
     existing = User.create!(username: "mary_jones", role: :user, oidc_provider: "jellyfin",
       oidc_uid: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
     ShelfarrJellyfinAuth.stub(:authenticate, { id: "a" * 32, name: "Mary Jones" }) do
-      login = remote_login
+      login = login_for
       login.create
       assert_same existing, login.logged_in
     end
   end
 
-  def test_same_name_cannot_sign_in_to_local_account
-    ShelfarrJellyfinAuth.stub(:authenticate, { id: "b" * 32, name: "localadmin" }) do
-      login = remote_login(username: "localadmin")
+  def test_a_jellyfin_name_that_normalizes_to_an_active_local_username_cannot_be_provisioned
+    User.create!(username: "mary_jones", role: :user)
+    ShelfarrJellyfinAuth.stub(:authenticate, { id: "b" * 32, name: "Mary Jones" }) do
+      login = login_for
       login.create
       assert_nil login.logged_in
       assert_match(/can't sign in/, login.result.last)
@@ -159,7 +159,7 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
     deleted = User.create!(username: "mary_jones", role: :admin)
     deleted.deleted = true
     ShelfarrJellyfinAuth.stub(:authenticate, { id: "a" * 32, name: "Mary Jones" }) do
-      login = remote_login
+      login = login_for
       login.create
       assert_equal "mary_jones", login.logged_in.username
       assert_equal :user, login.logged_in.role
@@ -171,14 +171,14 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
     deleted = User.create!(username: "mary_jones", role: :admin, oidc_provider: "jellyfin", oidc_uid: "a" * 32)
     deleted.deleted = true
     ShelfarrJellyfinAuth.stub(:authenticate, { id: "a" * 32, name: "Mary Jones" }) do
-      login = remote_login
+      login = login_for
       login.create
       assert_equal "mary_jones", login.logged_in.username
       assert_equal :user, login.logged_in.role
       refute_same deleted, login.logged_in
       assert deleted.deleted
 
-      repeat = remote_login
+      repeat = login_for
       repeat.create
       assert_same login.logged_in, repeat.logged_in
     end
@@ -186,7 +186,7 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
 
   def test_wrong_jellyfin_password_does_not_log_in
     ShelfarrJellyfinAuth.stub(:authenticate, nil) do
-      login = remote_login
+      login = login_for
       login.create
       assert_nil login.logged_in
       assert_equal "Invalid username or password.", login.result.last
@@ -195,9 +195,9 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
 
   def test_jellyfin_credentials_require_https_on_the_shelfarr_side
     ShelfarrJellyfinAuth.stub(:authenticate, ->(**) { flunk "Unexpected remote authentication" }) do
-      login = remote_login(https: false)
+      login = login_for(https: false)
       login.create
-      assert_match(/requires HTTPS/, login.result.last)
+      assert_equal "Sign in over HTTPS.", login.result.last
     end
   end
 
