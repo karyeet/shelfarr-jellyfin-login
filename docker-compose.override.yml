@@ -1,7 +1,7 @@
 services:
   shelfarr:
     environment:
-      JELLYFIN_AUTH_URL: "${JELLYFIN_AUTH_URL:?Set JELLYFIN_AUTH_URL in your .env file}"
+      JELLYFIN_AUTH_URL: "${JELLYFIN_AUTH_URL:-}"
       JELLYFIN_ALLOW_PRIVATE_HTTP: "${JELLYFIN_ALLOW_PRIVATE_HTTP:-false}"
     volumes:
       - type: bind
