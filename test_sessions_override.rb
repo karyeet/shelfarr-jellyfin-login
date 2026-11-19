@@ -71,14 +71,15 @@ class SessionsController
 
   def params = @params
   def create = (@result = :local_fallback)
-  def new_session_path(**) = "/session/new"
+  def action_name = "create"
+  def new_session_path(local: nil, **) = local ? "/session/new?local=1" : "/session/new"
   def sign_up_path = "/sign_up"
   def redirect_to(path, **options) = (@result = [path, options[:alert]])
 
   private
 
   def complete_login(user) = (@logged_in = user)
-  def handle_failed_login(*) = (@result = :failed_login)
+  def handle_failed_login(*) = redirect_to(new_session_path, alert: "Invalid username or password.")
   def log_security_event(*) = nil
 end
 SessionsController.prepend(ShelfarrJellyfinSessionsOverride)
@@ -114,7 +115,7 @@ class ShelfarrJellyfinSessionsTest < Minitest::Test
       %w[mary_jones unknown].each do |username|
         login = SessionsController.new(username: username, password: "fixture-password")
         login.create
-        assert_equal :failed_login, login.result
+        assert_equal ["/session/new?local=1", "Invalid username or password."], login.result
         assert_nil login.logged_in
       end
     end

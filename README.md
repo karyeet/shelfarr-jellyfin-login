@@ -1,17 +1,17 @@
 # Jellyfin sign-in for Shelfarr
 
-This unofficial Rails extension adds a separate **Sign in with Jellyfin** form to Shelfarr. Existing Shelfarr users use the standard form. A successful Jellyfin sign-in provisions a regular Shelfarr account and binds it to the Jellyfin user ID. If an active local account already has the same username, including after normalization, it keeps its own Shelfarr sign-in and the extension blocks Jellyfin account creation. Deleting a Shelfarr account frees its username for a fresh Jellyfin-linked account with the regular user role.
+This unofficial Rails extension shows the Jellyfin form directly on Shelfarr’s sign-in page. Existing Shelfarr users can open their usual form with **Use Shelfarr sign-in**. A successful Jellyfin sign-in provisions a regular Shelfarr account and binds it to the Jellyfin user ID. If an active local account already has the same username, including after normalization, it keeps its own Shelfarr sign-in and the extension blocks Jellyfin account creation. Deleting a Shelfarr account frees its username for a fresh Jellyfin-linked account with the regular user role.
 
 ## Install from GitHub
 
-1. Set up a local Shelfarr administrator and back up the Shelfarr storage volume. Keep **Disable password authentication** off, including the `DISABLE_AUTH` environment variable. Disable OIDC auto-redirect to show the password form by default. With auto-redirect enabled, use Shelfarr’s local sign-in link to reach the Jellyfin option.
+1. Set up a local Shelfarr administrator and back up the Shelfarr storage volume. Keep **Disable password authentication** off, including the `DISABLE_AUTH` environment variable. Disable OIDC auto-redirect to open the Jellyfin form by default.
 2. Add `extends` and the Jellyfin environment settings to the existing `shelfarr` service in your Compose file. Keep your existing image, volumes, and network settings. When switching from a ZIP install, remove the previous adapter bind mounts so Compose uses the GitHub copies.
 
    ```yaml
    services:
      shelfarr:
        extends:
-         file: https://github.com/karyeet/shelfarr-jellyfin-login.git#v0.1.1:docker-compose.override.yml
+         file: https://github.com/karyeet/shelfarr-jellyfin-login.git#v0.1.2:docker-compose.override.yml
          service: shelfarr
        environment:
          JELLYFIN_AUTH_URL: "https://jellyfin.example.net"
@@ -30,9 +30,9 @@ This unofficial Rails extension adds a separate **Sign in with Jellyfin** form t
    docker compose logs --tail=100 shelfarr
    ```
 
-6. Test your local administrator first. Then choose **Sign in with Jellyfin** and enter the actual Jellyfin username and password of a regular test user. Check the first sign-in, logout, repeat sign-in, wrong-password rejection, and Shelfarr two-factor verification if you use it.
+6. Test your local administrator with **Use Shelfarr sign-in**. Then open Shelfarr’s sign-in page and enter the actual Jellyfin username and password of a regular test user. Check the first sign-in, logout, repeat sign-in, wrong-password rejection, and Shelfarr two-factor verification if you use it.
 
-To publish your own GitHub release, put the contents of the release ZIP at the root of a repository you control and push a Git tag such as `v0.1.1`. The Compose URL refers to that Git tag. The three extension files and `docker-compose.override.yml` belong in the same directory.
+To publish your own GitHub release, put the contents of the release ZIP at the root of a repository you control and push a Git tag such as `v0.1.2`. The Compose URL refers to that Git tag. The three extension files and `docker-compose.override.yml` belong in the same directory.
 
 ### Install from the ZIP
 

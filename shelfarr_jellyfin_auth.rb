@@ -253,6 +253,14 @@ module ShelfarrJellyfinSessionsOverride
 
   private
 
+  # Shelfarr's built-in password errors redirect to this route.
+  def new_session_path(*args, **options)
+    return super unless args.empty? && options.empty? && action_name == "create" &&
+      ShelfarrJellyfinAuth.configured? && params[:login_provider] != PROVIDER
+
+    super(local: 1)
+  end
+
   def jellyfin_login_path
     new_session_path(login_provider: PROVIDER, local: 1)
   end
