@@ -1,0 +1,27 @@
+<% if SettingsService.auth_disabled? %>
+  <p class="text-center text-red-300">Shelfarr password authentication must be enabled to sign in.</p>
+<% elsif request.ssl? && params[:login_provider] == "jellyfin" %>
+  <div class="mx-auto md:w-2/3 w-full">
+    <h1 class="font-bold text-4xl text-white">Sign in with Jellyfin</h1>
+    <%= form_with url: session_path, class: "contents" do |form| %>
+      <%= form.hidden_field :login_provider, value: "jellyfin" %>
+      <div class="my-5">
+        <%= form.label :jellyfin_username, "Jellyfin username", class: "block mb-2 text-white" %>
+        <%= form.text_field :jellyfin_username, required: true, autofocus: true, autocomplete: "section-jellyfin username", maxlength: 256, class: "block w-full rounded-lg border-gray-700 bg-gray-800 text-white" %>
+      </div>
+      <div class="my-5">
+        <%= form.label :jellyfin_password, "Jellyfin password", class: "block mb-2 text-white" %>
+        <%= form.password_field :jellyfin_password, required: true, autocomplete: "section-jellyfin current-password", class: "block w-full rounded-lg border-gray-700 bg-gray-800 text-white" %>
+      </div>
+      <%= form.submit "Sign in with Jellyfin", class: "rounded-lg bg-blue-600 px-4 py-3 font-bold text-white" %>
+    <% end %>
+    <%= link_to "Use Shelfarr sign-in", new_session_path(local: 1), class: "block mt-5 text-blue-300 underline" %>
+  </div>
+<% else %>
+  <%= render template: "sessions/new" %>
+  <% if request.ssl? %>
+    <div class="mx-auto mt-5 w-full md:w-2/3">
+      <%= link_to "Sign in with Jellyfin", new_session_path(login_provider: "jellyfin", local: 1), class: "text-blue-300 underline" %>
+    </div>
+  <% end %>
+<% end %>

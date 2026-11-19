@@ -1,0 +1,24 @@
+services:
+  shelfarr:
+    environment:
+      JELLYFIN_AUTH_URL: "${JELLYFIN_AUTH_URL:?Set JELLYFIN_AUTH_URL in your .env file}"
+      JELLYFIN_ALLOW_PRIVATE_HTTP: "${JELLYFIN_ALLOW_PRIVATE_HTTP:-false}"
+    volumes:
+      - type: bind
+        source: ./shelfarr_jellyfin_auth.rb
+        target: /rails/config/initializers/shelfarr_jellyfin_auth.rb
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./shelfarr_jellyfin.html.erb
+        target: /rails/app/views/sessions/shelfarr_jellyfin.html.erb
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./20261118194731_add_shelfarr_jellyfin_last_otp_at_to_users.rb
+        target: /rails/db/migrate/20261118194731_add_shelfarr_jellyfin_last_otp_at_to_users.rb
+        read_only: true
+        bind:
+          create_host_path: false
